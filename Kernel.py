@@ -2,9 +2,6 @@ import numpy as np
 import pandas as pd
 
 from sklearn.preprocessing import Imputer
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.metrics import mean_absolute_error
-from sklearn.model_selection import train_test_split
 # This class is for the preprocessing, take csv path as input, and aim to return a pandas data frame for trainning
 class PreProcessing:
 
@@ -48,6 +45,29 @@ class PreProcessing:
     #self.df['ps_car_12'] = (self.df['ps_car_12']*self.df['ps_car_12']).round(4) * 10000
     return
 
+  # this method pack all previous preprocessing all together and return the data frame
+  def FinalFrameforTrainning(self):
+    self.MissingData()
+    #self.CorrMergeDrop()
+    return self.df
+
+from sklearn.metrics import roc_auc_score
+# this is a simple function to calculate gini score, for cross validation
+def GiniScore(y_actual, y_pred):
+  return 2*roc_auc_score(y_actual, y_pred)-1
+
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import mean_absolute_error
+from sklearn.model_selection import train_test_split
+from sklearn.datasets import make_classification
+from xgboost import XGBClassifier
+# this class define various trainning methods, also cross validation to tune the hyper parameters
+class Train:
+
+  # The constructor takes a pandas dataframe as input and save it to self.df
+  def __init__(self, df_train):
+    self.df = df_train
+
   # This method evaluate the preprocessing with rf regression model, calculate the mean absolute error. Be careful! this method can only used in train set!
   def PreprocessingScore(self):
     X_train, X_test, y_train, y_test = train_test_split(
@@ -58,28 +78,13 @@ class PreProcessing:
                                                         random_state=0
                                                        )
 
-    sc_mod = RandomForestRegressor()
+    sc_mod = RandomForestClassifier(n_estimators=500, max_features='auto', criterion='gini', max_depth=10, min_samples_leaf=10, min_samples_split=15, n_jobs=-1, random_state=0)
     sc_mod.fit(X_train, y_train)
-    preds = sc_mod.predict(X_test)
-    return mean_absolute_error(y_test, preds)
-
-  # this method pack all previous preprocessing all together and return the data frame
-  def FinalFrameforTrainning(self):
-    self.MissingData()
-    print (self.PreprocessingScore())
-    self.CorrMergeDrop()
-    #print (self.PreprocessingScore())
-    return self.df
-
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.datasets import make_classification
-from xgboost import XGBClassifier
-# this class define various trainning methods, also cross validation to tune the hyper parameters
-class Train:
-
-  # The constructor takes a pandas dataframe as input and save it to self.df
-  def __init__(self, df_train):
-    self.df = df_train
+    ysc_pred = sc_mod.predict_proba(X_test)[:,1]
+    #print (ysc_pred)
+    #print (y_test)
+    gini = 2*roc_auc_score(y_test, ysc_pred)-1
+    return gini
 
   # A simple train of random forest model with scikit learn
   def TrainSKLearnRandomForest(self):
@@ -106,11 +111,6 @@ class Train:
     fit_xgb = xgb.fit(self.df.drop(['id', 'target'],axis=1), self.df.target)
     return fit_xgb
   
-from sklearn.metrics import roc_auc_score
-# this is a simple function to calculate gini score, for cross validation
-def GiniScore(y_actual, y_pred):
-  return 2*roc_auc_score(y_actual, y_pred)-1
-
 # this class makes prediction, with various methods
 class Prediction:
 
@@ -154,11 +154,12 @@ if __name__ == '__main__':
   #test_p = preprocessing.FinalFrameforTrainning()
   #print ("done with test set preprocessing!")
   #test_p.to_csv('test_p.csv', index = False)
-  '''
   #train_p = pd.read_csv('train_p.csv')
   #test_p = pd.read_csv('test_p.csv')
   
   train = Train(train_p)
+  print (train.PreprocessingScore())
+  '''
   thisrf = train.TrainSKLearnRandomForest()
   #thisxgb = train.TrainXGBoost()
   print ("done with model trainning!")
